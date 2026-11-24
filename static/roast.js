@@ -2,7 +2,8 @@ const $ = id => document.getElementById(id);
 const fields = ["threshold", "minimum_area", "target_low", "target_high"];
 const overlayColors = {dark: "#859dff", target: "#8de4ae", light: "#ffb358"};
 const state = {sample: null, result: null, report: null, photo: null, selected: null,
-    probe: null, picking: false, corner: null, showMarks: true};
+    probe: null, picking: false, corner: null, showMarks: true, split: null,
+    splitPicking: false, splitHint: null};
 let busy = false;
 
 async function request(path, method = "GET", body) {
@@ -46,7 +47,9 @@ function run(action) {
 function inputs() {
     const base = state.result.settings;
     const values = Object.fromEntries(fields.map(key => [key, $("settings").elements[key].valueAsNumber]));
-    return {...base, ...values, exclude: values.threshold === base.threshold ? base.exclude : []};
+    const sameShapes = values.threshold === base.threshold && values.minimum_area === base.minimum_area;
+    return {...base, ...values, exclude: values.threshold === base.threshold ? base.exclude : [],
+        splits: sameShapes ? base.splits : []};
 }
 
 function displaySettings(settings) {
@@ -81,6 +84,7 @@ function draw() {
         for (const row of state.result.rows) {
             if (row.excluded && !$("showExcluded").checked) continue;
             const active = row.id === state.selected;
+            if (active && state.splitHint?.points) continue;
             ctx.strokeStyle = active ? "#fffdf8" : row.excluded ? "#ff8281" : overlayColors[row.band];
             ctx.lineWidth = active ? 4 : 2;
             ctx.beginPath();
@@ -95,6 +99,7 @@ function draw() {
             ctx.fillText(row.id, x, y + 1);
         }
     }
+    drawSplit();
     const marker = state.corner || state.probe?.point;
     if (marker) {
         const [x, y] = marker;
@@ -109,7 +114,28 @@ function draw() {
     }
 }
 
+function drawSplit() {
+    if (!state.showMarks || !state.splitHint?.possible) return;
+    const ctx = $("canvas").getContext("2d");
+    const points = state.splitHint.points;
+    ctx.save();
+    ctx.strokeStyle = "#ffe04f";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    points.forEach(([x, y], index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.stroke();
+    for (const [x, y] of [points[0], points[points.length - 1]]) {
+        ctx.fillStyle = "#ffe04f";
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
 function tooltip() {
+    if (state.splitPicking) return "Click the joined shape to preview a separating seam.";
     if (state.picking) return state.corner ? "Choose the opposite corner." : "Choose the first corner of the crop.";
     if (!state.probe) return "Click the tray to inspect a source pixel.";
     const p = state.probe;
@@ -127,6 +153,13 @@ function rowButton(label, action) {
     const button = document.createElement("button");
     button.textContent = label;
     if (action) button.addEventListener("click", run(action));
+    return button;
+}
+
+function splitButtonFor(bean) {
+    if (state.report) return null;
+    const button = rowButton("Split", () => suggestSplit(bean.id));
+    button.setAttribute("aria-label", "Find a seam in joined bean " + bean.id);
     return button;
 }
 
@@ -160,8 +193,86 @@ function beanTable() {
             const b = rowButton(bean.excluded ? "Include" : "Exclude", () => toggleBean(bean.id));
             b.setAttribute("aria-label", (bean.excluded ? "Include " : "Exclude ") + bean.id);
             use.append(b);
+            const splitButton = splitButtonFor(bean);
+            if (splitButton) use.append(splitButton);
         }
     }
+}
+
+function closeSplit() {
+    state.split = null;
+    state.splitHint = null;
+    state.splitPicking = false;
+    $("splitPanel").hidden = true;
+    $("splitButton").textContent = "Split joined bean";
+    $("splitButton").setAttribute("aria-pressed", "false");
+}
+
+function showSplit() {
+    const hint = state.splitHint;
+    $("splitPanel").hidden = false;
+    $("splitTitle").textContent = hint?.adopted ? "Split shape " + hint.bean
+        : "Joined shape " + (hint?.bean || state.split);
+    if (!hint) {
+        $("splitNote").textContent = "Reading the shape…";
+        $("splitAdopt").hidden = true;
+        return;
+    }
+    if (hint.possible && hint.adopted) {
+        const [first, second] = hint.pieces.map(piece => piece.area);
+        $("splitNote").textContent = "This shape is already split into two beans of " +
+            first + " px² and " + second + " px². Each is measured on its own.";
+        $("splitAdopt").hidden = true;
+    } else if (hint.possible) {
+        const [first, second] = hint.pieces.map(piece => piece.area);
+        const total = first + second;
+        const minimum = hint.minimum_area;
+        const how = hint.mode === "seam" ? "follows the visible dark seam" : "crosses the waist straight";
+        $("splitNote").textContent = "Suggested seam " + how + ". The two pieces add up to " +
+            total + " px², exactly the joined shape, and each is at least " + minimum + " px² (" +
+            first + " + " + second + ").";
+        $("splitAdopt").hidden = false;
+    } else {
+        $("splitNote").textContent = hint.reason || "No usable seam for this shape.";
+        $("splitAdopt").hidden = true;
+    }
+    draw();
+}
+
+async function suggestSplit(bean) {
+    state.splitPicking = false;
+    $("splitButton").textContent = "Cancel split";
+    $("splitButton").setAttribute("aria-pressed", "true");
+    state.split = bean;
+    state.splitHint = null;
+    state.selected = bean;
+    showSplit();
+    try {
+        state.splitHint = await request(samplePath("/seam"), "POST", {
+            bean, report: state.report?.id,
+            settings: state.report ? undefined : state.result.settings,
+        });
+    } catch (error) {
+        closeSplit();
+        draw();
+        beanTable();
+        throw error;
+    }
+    showSplit();
+    beanTable();
+}
+
+async function adoptSplit() {
+    const hint = state.splitHint;
+    if (!hint?.possible || hint.adopted) return;
+    const settings = state.result.settings;
+    const splits = (settings.splits || []).filter(item => item.bean !== hint.bean);
+    splits.push({bean: hint.bean, points: hint.points});
+    const exclude = (settings.exclude || []).filter(id => id !== hint.bean);
+    closeSplit();
+    state.selected = null;
+    await refresh({...settings, splits, exclude});
+    notice("Split adopted. The joined record left the table; its two beans are measured separately.");
 }
 
 function renderSummary(summary) {
@@ -197,6 +308,9 @@ function render() {
     const archived = !!state.report;
     $("inputs").disabled = archived;
     $("crop").disabled = archived;
+    $("splitButton").disabled = archived;
+    if (archived && (state.split || state.splitHint)) closeSplit();
+    $("splitPanel").hidden = archived || !state.split;
     $("saveReport").hidden = archived;
     $("live").hidden = !archived;
     $("downloads").hidden = !archived;
@@ -228,6 +342,7 @@ function clearSelection() {
     state.picking = false;
     state.corner = null;
     $("crop").textContent = "Set crop";
+    closeSplit();
 }
 
 async function refresh(settings) {
@@ -301,12 +416,39 @@ $("original").onclick = () => {
     draw();
 };
 $("crop").onclick = () => {
+    closeSplit();
     state.picking = !state.picking;
     state.corner = null;
     $("crop").textContent = state.picking ? "Cancel crop" : "Set crop";
     $("viewerStatus").textContent = tooltip();
     draw();
 };
+$("splitButton").onclick = () => {
+    if (state.report) return;
+    if (state.splitPicking || state.split) {
+        closeSplit();
+        $("viewerStatus").textContent = tooltip();
+        draw();
+        beanTable();
+        return;
+    }
+    state.picking = false;
+    state.corner = null;
+    $("crop").textContent = "Set crop";
+    state.splitPicking = true;
+    $("splitButton").textContent = "Cancel split";
+    $("splitButton").setAttribute("aria-pressed", "true");
+    $("viewerStatus").textContent = tooltip();
+};
+$("splitClose").onclick = () => {
+    const bean = state.splitHint?.bean;
+    closeSplit();
+    state.selected = bean || state.selected;
+    $("viewerStatus").textContent = tooltip();
+    draw();
+    beanTable();
+};
+$("splitAdopt").onclick = run(adoptSplit);
 $("showExcluded").onchange = () => {
     draw();
     beanTable();
@@ -314,6 +456,16 @@ $("showExcluded").onchange = () => {
 $("canvas").onclick = run(async event => {
     const point = renderedPosition(event);
     if (!point) return;
+    if (state.splitPicking) {
+        const found = await request(samplePath("/point"), "POST", {point, report: state.report?.id,
+            settings: state.report ? undefined : state.result.settings});
+        if (!found.bean) {
+            notice("That click is not on a measured shape. Choose a joined bean.");
+            return;
+        }
+        await suggestSplit(found.bean);
+        return;
+    }
     if (!state.picking) {
         await selectPoint(point);
     } else if (!state.corner) {
@@ -324,7 +476,7 @@ $("canvas").onclick = run(async event => {
         const [x, y] = state.corner;
         const [u, v] = point;
         const box = [Math.min(x, u), Math.min(y, v), Math.max(x, u) + 1, Math.max(y, v) + 1];
-        await refresh({...state.result.settings, box, exclude: []});
+        await refresh({...state.result.settings, box, exclude: [], splits: []});
         clearSelection();
         render();
     }

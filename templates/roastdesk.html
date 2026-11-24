@@ -40,12 +40,19 @@
             <label class="visually-hidden" for="sampleList">Open tray</label><select id="sampleList"></select>
             <small id="photoInfo"></small>
           </div>
-          <div class="actions"><button id="crop">Set crop</button><button id="original" aria-pressed="false">Hide marks</button></div>
+          <div class="actions"><button id="splitButton">Split joined bean</button><button id="crop">Set crop</button><button id="original" aria-pressed="false">Hide marks</button></div>
         </div>
         <div class="stage"><canvas id="canvas" aria-label="Tray photograph with labeled bean outlines"></canvas></div>
         <div class="status-bar"><span id="viewerStatus">Click the tray to inspect a source pixel.</span><a id="sourceLink" download>Source PNG ↓</a></div>
         <div class="results">
           <div class="section-head"><h2>Bean measurements</h2><label class="together"><input type="checkbox" id="showExcluded" checked> Show excluded</label></div>
+          <div class="split-panel" id="splitPanel" hidden>
+            <div class="split-head"><strong id="splitTitle"></strong><button type="button" id="splitClose" aria-label="Close split suggestion">Close</button></div>
+            <p id="splitNote"></p>
+            <div class="actions">
+              <button type="button" id="splitAdopt" class="primary">Adopt split</button>
+            </div>
+          </div>
           <div class="table-wrap">
             <table>
               <thead><tr><th scope="col">Position</th><th scope="col">Area px²</th><th scope="col">Mean RGB</th><th scope="col">Lightness</th><th scope="col">Tone band</th><th scope="col">Use</th></tr></thead>

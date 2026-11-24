@@ -84,6 +84,15 @@ def install(app, root):
         settings = model.settings(record, data.get("settings", {}))
         return jsonify(library.revise(sample_id, data.get("revision"), settings))
 
+    @desk.post("/samples/<sample_id>/seam")
+    def seam(sample_id):
+        data = body()
+        saved = data.get("report")
+        record = library.report(sample_id, saved) if saved else library.sample(sample_id)
+        settings = record["settings"] if saved else model.settings(record, data.get("settings", {}))
+        bean = model.bean_key(data.get("bean"))
+        return jsonify(analysis.hint(frame.pixels(library, record), settings, bean))
+
     @desk.post("/samples/<sample_id>/point")
     def probe(sample_id):
         data = body()

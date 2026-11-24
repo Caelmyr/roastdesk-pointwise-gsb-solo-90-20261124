@@ -53,6 +53,11 @@ canvas { max-width: 100%; width: auto; height: auto; max-height: 56vh; object-fi
 .status-bar { min-height: 42px; padding: 8px 14px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--line); }
 .status-bar a { white-space: nowrap; }
 .results { padding: 13px; }
+.split-panel { margin-top: 11px; padding: 11px 12px; background: #fff6de; border: 1px solid #e8d5a6; border-radius: 7px; }
+.split-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.split-head button { min-height: auto; padding: 2px 8px; font-size: 12px; }
+.split-panel p { margin: 7px 0 0; font-size: 13px; color: var(--ink); }
+.split-panel .actions { margin-top: 9px; }
 .table-wrap { overflow: auto; max-height: 410px; }
 table { width: 100%; border-collapse: collapse; margin-top: 7px; font-size: 13px; text-align: left; white-space: nowrap; }
 th,td { padding: 8px; border-bottom: 1px solid var(--line); }

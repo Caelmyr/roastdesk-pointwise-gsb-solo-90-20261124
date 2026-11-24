@@ -22,12 +22,19 @@ def table(report):
     return buffer.getvalue()
 
 
+SEAM = "#FFE04F"
+
+
 def overlay(source, report):
     with Image.open(source) as image:
         photo = image.convert("RGB")
     draw = ImageDraw.Draw(photo)
     left, top, right, bottom = report["settings"]["box"]
     draw.rectangle((left, top, right - 1, bottom - 1), outline="#FFFAE0", width=2)
+    for seam in report["settings"].get("splits", []):
+        points = [tuple(point) for point in seam["points"]]
+        if len(points) > 1:
+            draw.line(points, fill=SEAM, width=2)
     for row in report["rows"]:
         color = EXCLUDED if row["excluded"] else COLORS[row["band"]]
         contour = [tuple(point) for point in row["outline"]]

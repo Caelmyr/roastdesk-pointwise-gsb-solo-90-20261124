@@ -13,10 +13,19 @@ volume stays available after `./start.sh stop`. The same desk can run with
    each shape's area, mean RGB, brightness and roast color band. Exclude sample
    fragments or bring them back. The histogram and summary count each included
    bean once. Crop or separator changes clear exclusions tied to the prior shapes.
-4. Save the current setup for this tray. Save an inspection to retain its original
+4. When two beans touch, press Split (or choose Split on its row) and click the joined
+   shape. RoastDesk proposes one dividing line: it follows a visible dark seam when
+   that seam is trustworthy, otherwise it crosses the waist straight. The two pieces
+   always tile the original shape exactly and each must reach the minimum bean area;
+   when that is impossible the shape is left whole and the reason is shown. Adopt the
+   suggestion to measure the two pieces (area and bean-face color) separately: the
+   joined record leaves the table and summary, and earlier exclusions stay put. The
+   seam is part of the saved setup and archived inspection, and is drawn on the
+   marked PNG.
+5. Save the current setup for this tray. Save an inspection to retain its original
    settings and measurements in an immutable archive. Reopen it and download the
    original image, bean table or marked PNG.
-5. Use Photo preparation for input alignment, composition and tonal correction.
+6. Use Photo preparation for input alignment, composition and tonal correction.
    Its current result can open a new tray inspection while preserving preparation provenance.
 
 Source coordinates are on the displayed-orientation RGB image. Use opaque, single
