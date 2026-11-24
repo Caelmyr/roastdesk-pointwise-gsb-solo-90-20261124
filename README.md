@@ -13,10 +13,16 @@ volume stays available after `./start.sh stop`. The same desk can run with
    each shape's area, mean RGB, brightness and roast color band. Exclude sample
    fragments or bring them back. The histogram and summary count each included
    bean once. Crop or separator changes clear exclusions tied to the prior shapes.
-4. Save the current setup for this tray. Save an inspection to retain its original
+4. To check whether light-band beans cluster, fill in a pixel size and recommend a
+   review window inside the crop. The recommendation counts only beans fully inside
+   the window, never counts excluded ones, keeps at least two target-band beans for
+   color reference, favors the most light beans with the fewest others crowding in,
+   and never cuts a bean at its edge. Adopting the window makes it the new crop, so
+   the bean table simply continues from there.
+5. Save the current setup for this tray. Save an inspection to retain its original
    settings and measurements in an immutable archive. Reopen it and download the
    original image, bean table or marked PNG.
-5. Use Photo preparation for input alignment, composition and tonal correction.
+6. Use Photo preparation for input alignment, composition and tonal correction.
    Its current result can open a new tray inspection while preserving preparation provenance.
 
 Source coordinates are on the displayed-orientation RGB image. Use opaque, single

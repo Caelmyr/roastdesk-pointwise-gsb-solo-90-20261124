@@ -71,6 +71,19 @@
           </form>
         </section>
         <section>
+          <h2>Review window</h2>
+          <form id="windowForm">
+            <fieldset id="windowInputs">
+              <div class="pair">
+                <label>Window width <input type="number" name="width" min="1" max="4096" required></label>
+                <label>Window height <input type="number" name="height" min="1" max="4096" required></label>
+              </div>
+              <div class="actions"><button class="primary">Recommend window</button><button type="button" id="adoptWindow" hidden>Adopt window</button><button type="button" id="dismissWindow" hidden>Dismiss</button></div>
+              <p id="windowReadout"></p>
+            </fieldset>
+          </form>
+        </section>
+        <section>
           <div class="section-head"><h2>Tray summary</h2><span class="badge" id="sampleCount"></span></div>
           <div class="metrics">
             <div><small>Mean lightness</small><strong id="mean"></strong></div>

@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const fields = ["threshold", "minimum_area", "target_low", "target_high"];
 const overlayColors = {dark: "#859dff", target: "#8de4ae", light: "#ffb358"};
 const state = {sample: null, result: null, report: null, photo: null, selected: null,
-    probe: null, picking: false, corner: null, showMarks: true};
+    probe: null, picking: false, corner: null, showMarks: true, window: null};
 let busy = false;
 
 async function request(path, method = "GET", body) {
@@ -94,6 +94,16 @@ function draw() {
             ctx.fillStyle = ctx.strokeStyle;
             ctx.fillText(row.id, x, y + 1);
         }
+    }
+    if (state.window) {
+        const [wLeft, wTop, wRight, wBottom] = state.window.box;
+        ctx.fillStyle = "rgba(194, 80, 31, 0.08)";
+        ctx.fillRect(wLeft, wTop, wRight - wLeft, wBottom - wTop);
+        ctx.strokeStyle = "#c2501f";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([12, 7]);
+        ctx.strokeRect(wLeft + 1.5, wTop + 1.5, Math.max(0, wRight - wLeft - 3), Math.max(0, wBottom - wTop - 3));
+        ctx.setLineDash([]);
     }
     const marker = state.corner || state.probe?.point;
     if (marker) {
@@ -188,6 +198,15 @@ function firstOption(title, id = "") {
     return option;
 }
 
+function renderWindow() {
+    const proposal = state.window;
+    $("adoptWindow").hidden = $("dismissWindow").hidden = !proposal;
+    $("windowReadout").textContent = !proposal ? "" :
+        "Window " + proposal.size.join(" × ") + " px at " + proposal.box[0] + ", " + proposal.box[1] +
+        " · " + proposal.counts.light + " light · " + proposal.counts.target + " target · " +
+        proposal.counts.dark + " dark fully inside · " + proposal.placements + " placements";
+}
+
 function render() {
     draw();
     $("viewerStatus").textContent = tooltip();
@@ -196,7 +215,9 @@ function render() {
     displaySettings(state.result.settings);
     const archived = !!state.report;
     $("inputs").disabled = archived;
+    $("windowInputs").disabled = archived;
     $("crop").disabled = archived;
+    renderWindow();
     $("saveReport").hidden = archived;
     $("live").hidden = !archived;
     $("downloads").hidden = !archived;
@@ -227,10 +248,12 @@ function clearSelection() {
     state.selected = null;
     state.picking = false;
     state.corner = null;
+    state.window = null;
     $("crop").textContent = "Set crop";
 }
 
 async function refresh(settings) {
+    state.window = null;
     state.result = await request(samplePath("/inspect"), "POST", {settings});
     render();
 }
@@ -256,6 +279,9 @@ async function openSample(id, samples) {
     state.report = null;
     state.photo = photo;
     clearSelection();
+    const [cLeft, cTop, cRight, cBottom] = result.settings.box;
+    $("windowForm").elements.width.value = Math.max(1, Math.round((cRight - cLeft) / 2));
+    $("windowForm").elements.height.value = Math.max(1, Math.round((cBottom - cTop) / 2));
     $("canvas").width = sample.width;
     $("canvas").height = sample.height;
     $("sampleList").replaceChildren(...available.map(entry => firstOption(entry.title, entry.id)));
@@ -329,6 +355,28 @@ $("canvas").onclick = run(async event => {
         render();
     }
 });
+$("windowForm").onsubmit = run(async () => {
+    if (!$("windowForm").reportValidity()) return;
+    const size = ["width", "height"].map(name => $("windowForm").elements[name].valueAsNumber);
+    state.window = await request(samplePath("/window"), "POST", {settings: state.result.settings, size});
+    render();
+});
+$("adoptWindow").onclick = run(async () => {
+    const settings = state.result.settings;
+    const proposal = state.window;
+    const [left, top, right, bottom] = proposal.box;
+    const inside = new Set(state.result.rows.filter(row => {
+        const [x1, y1, x2, y2] = row.box;
+        return x1 >= left && y1 >= top && x2 <= right && y2 <= bottom;
+    }).map(row => row.id));
+    clearSelection();
+    await refresh({...settings, box: proposal.box, exclude: settings.exclude.filter(id => inside.has(id))});
+    notice("Review window adopted as the new crop.");
+});
+$("dismissWindow").onclick = () => {
+    state.window = null;
+    render();
+};
 $("settings").onsubmit = run(async () => {
     if (!$("settings").reportValidity()) return;
     const settings = inputs();

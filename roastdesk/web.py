@@ -77,6 +77,13 @@ def install(app, root):
     def preview(sample_id):
         return jsonify(inspect(library.sample(sample_id), body()))
 
+    @desk.post("/samples/<sample_id>/window")
+    def window(sample_id):
+        data = body()
+        record = library.sample(sample_id)
+        settings = model.settings(record, data.get("settings", {}))
+        return jsonify(analysis.recommend(frame.pixels(library, record), settings, data.get("size")))
+
     @desk.put("/samples/<sample_id>/settings")
     def revise(sample_id):
         data = body()

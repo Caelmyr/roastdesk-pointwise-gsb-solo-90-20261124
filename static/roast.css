@@ -69,7 +69,8 @@ label:not(.together) { display: grid; min-width: 0; gap: 5px; margin-bottom: 10p
 .together { font-size: 13px; display: flex; align-items: center; gap: 4px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .controls input:not([type=checkbox]) { width: 100%; }
-#cropReadout { margin: 1px 0 12px; font-size: 12px; }
+#cropReadout,#windowReadout { margin: 1px 0 12px; font-size: 12px; }
+#windowReadout { margin: 10px 0 0; }
 .badge { border-radius: 14px; padding: 4px 8px; background: #eee6d8; font-size: 12px; color: #5c4831; }
 .metrics { display: grid; grid-template-columns: repeat(3,1fr); margin: 15px 0 11px; }
 .metrics small,.metrics strong { display: block; }
