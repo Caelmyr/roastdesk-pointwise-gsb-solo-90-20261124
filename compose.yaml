@@ -1,0 +1,23 @@
+name: solo93-roastdesk
+services:
+  desk:
+    build:
+      context: .
+      args:
+        ROASTDESK_RUNTIME_IMAGE: ${ROASTDESK_RUNTIME_IMAGE:-python:3.12-slim}
+    image: ${ROASTDESK_IMAGE:-solo93-roastdesk:1.0}
+    network_mode: bridge
+    environment:
+      OPENBLAS_NUM_THREADS: 1
+      OMP_NUM_THREADS: 1
+    ports:
+      - "127.0.0.1:${ROASTDESK_PORT:-19893}:8000"
+    volumes:
+      - roast-data:/var/lib/roastdesk
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8000/roast/health', timeout=3).status == 200"]
+      interval: 3s
+      timeout: 4s
+      retries: 12
+volumes:
+  roast-data:

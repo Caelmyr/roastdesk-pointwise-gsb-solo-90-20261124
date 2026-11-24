@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RoastDesk</title>
+  <link rel="stylesheet" href="/static/roast.css">
+  <script src="/static/roast.js" defer></script>
+</head>
+<body>
+  <header class="mast">
+    <a href="/" class="brand"><i aria-hidden="true"></i>Roast<span>Desk</span></a>
+    <nav aria-label="Workspaces"><a href="/prepare">Photo preparation ↗</a></nav>
+  </header>
+  <main>
+    <section class="intro">
+      <div>
+        <h1>Roast color inspection</h1>
+        <p>Measure individual beans from a tray photograph.</p>
+      </div>
+      <div class="actions"><button id="demo">Open synthetic sample</button><button class="primary" id="add">Import tray photo</button></div>
+    </section>
+    <div class="notice" id="notice" role="status" hidden></div>
+    <dialog id="importDialog">
+      <form id="importForm">
+        <h2>Import tray photo</h2>
+        <label>Sample name<input name="title" maxlength="120" placeholder="Optional"></label>
+        <label>PNG or JPEG<input name="photo" type="file" accept="image/png,image/jpeg" required></label>
+        <div class="actions"><button type="button" id="cancelImport">Cancel</button><button class="primary">Import photo</button></div>
+      </form>
+    </dialog>
+    <section class="empty" id="empty">
+      <h2>Add a tray to begin</h2>
+      <p>Use an overhead photo on a pale, matte background, or open the synthetic sample.</p>
+    </section>
+    <div class="desk" id="desk" hidden>
+      <section class="work">
+        <div class="toolbar">
+          <div>
+            <label class="visually-hidden" for="sampleList">Open tray</label><select id="sampleList"></select>
+            <small id="photoInfo"></small>
+          </div>
+          <div class="actions"><button id="crop">Set crop</button><button id="original" aria-pressed="false">Hide marks</button></div>
+        </div>
+        <div class="stage"><canvas id="canvas" aria-label="Tray photograph with labeled bean outlines"></canvas></div>
+        <div class="status-bar"><span id="viewerStatus">Click the tray to inspect a source pixel.</span><a id="sourceLink" download>Source PNG ↓</a></div>
+        <div class="results">
+          <div class="section-head"><h2>Bean measurements</h2><label class="together"><input type="checkbox" id="showExcluded" checked> Show excluded</label></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th scope="col">Position</th><th scope="col">Area px²</th><th scope="col">Mean RGB</th><th scope="col">Lightness</th><th scope="col">Tone band</th><th scope="col">Use</th></tr></thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <aside class="controls">
+        <section id="configuration">
+          <h2>Sampling setup</h2>
+          <form id="settings">
+            <fieldset id="inputs">
+              <label>Tray separator <input type="number" name="threshold" min="1" max="254" required></label>
+              <label>Minimum bean area <input type="number" name="minimum_area" min="1" max="4000000" required></label>
+              <div class="pair">
+                <label>Dark boundary <input type="number" name="target_low" min="0" max="254" required></label>
+                <label>Light boundary <input type="number" name="target_high" min="1" max="255" required></label>
+              </div>
+              <p id="cropReadout"></p>
+              <div class="actions"><button class="primary">Update measurements</button><button type="button" id="saveSetup">Save setup</button></div>
+            </fieldset>
+          </form>
+        </section>
+        <section>
+          <div class="section-head"><h2>Tray summary</h2><span class="badge" id="sampleCount"></span></div>
+          <div class="metrics">
+            <div><small>Mean lightness</small><strong id="mean"></strong></div>
+            <div><small>Median</small><strong id="median"></strong></div>
+            <div><small>Spread</small><strong id="spread"></strong></div>
+          </div>
+          <div id="histogram" aria-label="Lightness distribution"></div>
+          <div class="scale"><span>0</span><span>Source lightness</span><span>255</span></div>
+          <div class="bands"><span id="dark"></span><span id="target"></span><span id="light"></span></div>
+          <div class="footnote" id="excluded"></div>
+        </section>
+        <section>
+          <h2>Saved inspections</h2>
+          <div class="archive-actions"><button id="saveReport" class="primary">Save inspection</button><button id="live" hidden>Back to live tray</button></div>
+          <label class="visually-hidden" for="reportList">Saved inspections</label><select id="reportList"></select>
+          <div class="downloads" id="downloads" hidden><a id="reportCsv" download>Bean CSV ↓</a><a id="reportImage" download>Marked PNG ↓</a></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
