@@ -5,6 +5,7 @@ import numpy as np
 
 from image_lab.validation import Invalid
 
+from . import sampling
 from .frame import luma
 from .model import MAX_COMPONENTS
 
@@ -21,11 +22,13 @@ def silhouettes(rgb, settings):
     return crop, labels, visible
 
 
-def area_and_color(rgb_pixels):
+def area_and_color(rgb_pixels, area=None):
     rgb_mean = rgb_pixels.mean(axis=0)
     brightness = luma(rgb_pixels)
     return {
-        "area": len(rgb_pixels), "rgb": np.round(rgb_mean, 1).tolist(),
+        "area": int(len(rgb_pixels) if area is None else area),
+        "sampled_area": int(len(rgb_pixels)),
+        "rgb": np.round(rgb_mean, 1).tolist(),
         "lightness": round(float(brightness.mean()), 2),
         "spread": round(float(brightness.std()), 2),
     }
@@ -34,15 +37,31 @@ def area_and_color(rgb_pixels):
 def bean_rows(crop, labels, visible, settings):
     left, top, right, bottom = settings["box"]
     excluded = set(settings["exclude"])
+    chosen = settings.get("sampling", {})
     rows = []
     for label, stats, center in visible:
         x, y, width, height, _ = map(int, stats)
         label_tile = labels[y:y + height, x:x + width]
         mask = label_tile == label
         photo_tile = crop[y:y + height, x:x + width]
-        area_color = area_and_color(photo_tile[mask])
         seed_column = int(np.flatnonzero(mask[0])[0])
         bean_id = f"{left + x + seed_column}:{top + y}"
+        sample = chosen.get(bean_id)
+        face = mask
+        kept = None
+        if sample:
+            face = mask | sampling.enclosed_holes(mask)
+            avoided = sampling.runs_mask(mask.shape, (left + x, top + y), sample["avoid"])
+            kept = face & ~avoided
+            if kept.sum():
+                area_color = area_and_color(photo_tile[kept], area=int(mask.sum()))
+            else:
+                # The stored plan no longer fits this shape; keep the reading and
+                # let the interface offer a fresh suggestion.
+                sample, kept = None, None
+                area_color = area_and_color(photo_tile[mask])
+        else:
+            area_color = area_and_color(photo_tile[mask])
         contours, _ = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         outer = max(contours, key=cv2.contourArea)
         geometry = cv2.approxPolyDP(outer, 0.85, True)[:, 0] + [left + x, top + y]
@@ -59,9 +78,36 @@ def bean_rows(crop, labels, visible, settings):
             "center": [round(float(center[0] + left), 2), round(float(center[1] + top), 2)],
             "box": [left + x, top + y, left + x + width, top + y + height],
             "outline": geometry.tolist(), "band": band, "touches_crop": edge,
-            "excluded": bean_id in excluded,
+            "excluded": bean_id in excluded, "sampling": sample is not None,
+            "retained": sampling.polygons(kept, (left + x, top + y)) if kept is not None else [],
+            "avoided": sampling.polygons(face & ~kept, (left + x, top + y)) if kept is not None else [],
         })
     return sorted(rows, key=lambda bean: (bean["seed"][1], bean["seed"][0]))
+
+
+def silhouette(crop, labels, visible, bean_id, settings):
+    """Return the bean tile, silhouette mask and source offset for one bean ID."""
+    left, top, _, _ = settings["box"]
+    for label, stats, _ in visible:
+        x, y, width, height, _ = map(int, stats)
+        mask = labels[y:y + height, x:x + width] == label
+        seed_column = int(np.flatnonzero(mask[0])[0])
+        if f"{left + x + seed_column}:{top + y}" == bean_id:
+            return crop[y:y + height, x:x + width], mask, (left + x, top + y)
+    return None
+
+
+def recommend(rgb, settings, bean_id, plan=None):
+    """Suggest a sampling area, or replay an adopted ``plan`` for this bean."""
+    crop, labels, visible = silhouettes(rgb, settings)
+    found = silhouette(crop, labels, visible, bean_id, settings)
+    if found is None:
+        return None
+    tile, mask, offset = found
+    result = sampling.recommend(tile, mask, bean_id, settings, offset, plan)
+    if result is not None:
+        result["minimum_ratio"] = round(float(settings["minimum_retained"]), 4)
+    return result
 
 
 def tray_summary(rows):
@@ -75,7 +121,9 @@ def tray_summary(rows):
         "mean": round(float(tones.mean()), 2) if len(tones) else None,
         "median": round(float(np.median(tones)), 2) if len(tones) else None,
         "spread": round(float(tones.std()), 2) if len(tones) else None,
-        "area": sum(row["area"] for row in included), "bands": counts,
+        "area": sum(row["area"] for row in included),
+        "sampled_area": sum(row["sampled_area"] for row in included),
+        "bands": counts,
         "histogram": [{"edge": int(edge), "count": int(count)}
                       for edge, count in zip(edges[:-1], histogram)],
     }

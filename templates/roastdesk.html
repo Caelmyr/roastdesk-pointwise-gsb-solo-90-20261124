@@ -44,11 +44,28 @@
         </div>
         <div class="stage"><canvas id="canvas" aria-label="Tray photograph with labeled bean outlines"></canvas></div>
         <div class="status-bar"><span id="viewerStatus">Click the tray to inspect a source pixel.</span><a id="sourceLink" download>Source PNG ↓</a></div>
+        <div class="sampling" id="sampling" hidden>
+          <div class="section-head">
+            <h2>Highlight sampling · <span id="samplingBean"></span></h2>
+            <span class="badge" id="samplingState"></span>
+          </div>
+          <p id="samplingSummary"></p>
+          <div class="keep">
+            <span class="swatch" style="background:#3ed6c0"></span>Kept pixels
+            <span class="swatch" style="background:#f2c14e"></span>Avoided glare and rim
+          </div>
+          <div class="actions">
+            <button class="primary" id="adoptSampling">Use this sampling area</button>
+            <button id="restoreSampling" hidden>Restore whole bean</button>
+            <button id="closeSampling">Close</button>
+            <a id="samplingImage" download>Sampling PNG ↓</a>
+          </div>
+        </div>
         <div class="results">
           <div class="section-head"><h2>Bean measurements</h2><label class="together"><input type="checkbox" id="showExcluded" checked> Show excluded</label></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th scope="col">Position</th><th scope="col">Area px²</th><th scope="col">Mean RGB</th><th scope="col">Lightness</th><th scope="col">Tone band</th><th scope="col">Use</th></tr></thead>
+              <thead><tr><th scope="col">Position</th><th scope="col">Area px²</th><th scope="col">Mean RGB</th><th scope="col">Lightness</th><th scope="col">Tone band</th><th scope="col">Sampled px²</th><th scope="col">Use</th></tr></thead>
               <tbody id="rows"></tbody>
             </table>
           </div>
@@ -65,6 +82,7 @@
                 <label>Dark boundary <input type="number" name="target_low" min="0" max="254" required></label>
                 <label>Light boundary <input type="number" name="target_high" min="1" max="255" required></label>
               </div>
+              <label>Keep at least <input type="number" name="minimum_retained" min="1" max="100" step="1" required> % of the bean face</label>
               <p id="cropReadout"></p>
               <div class="actions"><button class="primary">Update measurements</button><button type="button" id="saveSetup">Save setup</button></div>
             </fieldset>

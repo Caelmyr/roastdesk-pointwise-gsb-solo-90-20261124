@@ -13,10 +13,17 @@ volume stays available after `./start.sh stop`. The same desk can run with
    each shape's area, mean RGB, brightness and roast color band. Exclude sample
    fragments or bring them back. The histogram and summary count each included
    bean once. Crop or separator changes clear exclusions tied to the prior shapes.
-4. Save the current setup for this tray. Save an inspection to retain its original
+4. When a bean face reflects light, the panel suggests a sampling area for the bean
+   you clicked. White or grey glare and a small uncertain rim around it are left out;
+   the remaining original pixels are marked in teal and the avoided pixels in amber.
+   The whole bean area is still measured. Adopt the suggestion to recompute that
+   bean's color, lightness and band from the retained original pixels only — its
+   area and every other bean stay as they were. If less than your minimum share of
+   the bean face would remain, the current reading is kept and a retake is requested.
+5. Save the current setup for this tray. Save an inspection to retain its original
    settings and measurements in an immutable archive. Reopen it and download the
    original image, bean table or marked PNG.
-5. Use Photo preparation for input alignment, composition and tonal correction.
+6. Use Photo preparation for input alignment, composition and tonal correction.
    Its current result can open a new tray inspection while preserving preparation provenance.
 
 Source coordinates are on the displayed-orientation RGB image. Use opaque, single

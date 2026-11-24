@@ -2,7 +2,7 @@ const $ = id => document.getElementById(id);
 const fields = ["threshold", "minimum_area", "target_low", "target_high"];
 const overlayColors = {dark: "#859dff", target: "#8de4ae", light: "#ffb358"};
 const state = {sample: null, result: null, report: null, photo: null, selected: null,
-    probe: null, picking: false, corner: null, showMarks: true};
+    probe: null, picking: false, corner: null, showMarks: true, sampling: null};
 let busy = false;
 
 async function request(path, method = "GET", body) {
@@ -46,11 +46,13 @@ function run(action) {
 function inputs() {
     const base = state.result.settings;
     const values = Object.fromEntries(fields.map(key => [key, $("settings").elements[key].valueAsNumber]));
+    values.minimum_retained = $("settings").elements.minimum_retained.valueAsNumber / 100;
     return {...base, ...values, exclude: values.threshold === base.threshold ? base.exclude : []};
 }
 
 function displaySettings(settings) {
     for (const key of fields) $("settings").elements[key].value = settings[key];
+    $("settings").elements.minimum_retained.value = Math.round(settings.minimum_retained * 100);
     const [left, top, right, bottom] = settings.box;
     $("cropReadout").textContent = "Crop " + (right - left) + " × " + (bottom - top) + " px from " + left + ", " + top;
 }
@@ -65,6 +67,14 @@ function renderedPosition(event) {
     const y = Math.floor((event.clientY - rect.top - insetY) / scale);
     if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) return [x, y];
     return null;
+}
+
+function polygon(ctx, points) {
+    if (!points.length) return;
+    ctx.beginPath();
+    points.forEach(([x, y], index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.closePath();
+    ctx.stroke();
 }
 
 function draw() {
@@ -93,6 +103,23 @@ function draw() {
             ctx.fillRect(x - 4, y - 14, ctx.measureText(row.id).width + 9, 20);
             ctx.fillStyle = ctx.strokeStyle;
             ctx.fillText(row.id, x, y + 1);
+            if (row.sampling) {
+                ctx.fillStyle = "#f2c14e88";
+                for (const points of row.avoided) { ctx.beginPath(); ctx.moveTo(...points[0]); points.slice(1).forEach(p => ctx.lineTo(...p)); ctx.closePath(); ctx.fill(); }
+                ctx.strokeStyle = "#3ed6c0";
+                ctx.lineWidth = 2;
+                row.retained.forEach(points => polygon(ctx, points));
+            }
+        }
+        if (state.sampling) {
+            ctx.fillStyle = "#f2c14e66";
+            for (const points of state.sampling.outline.avoided) { ctx.beginPath(); ctx.moveTo(...points[0]); points.slice(1).forEach(p => ctx.lineTo(...p)); ctx.closePath(); ctx.fill(); }
+            ctx.strokeStyle = "#3ed6c0";
+            ctx.lineWidth = 2;
+            state.sampling.outline.retained.forEach(points => polygon(ctx, points));
+            ctx.strokeStyle = "#f2c14e";
+            ctx.lineWidth = 2;
+            state.sampling.outline.avoided.forEach(points => polygon(ctx, points));
         }
     }
     const marker = state.corner || state.probe?.point;
@@ -136,7 +163,7 @@ function beanTable() {
     const rows = state.result.rows.filter(row => !row.excluded || $("showExcluded").checked);
     if (!rows.length) {
         const empty = cell(list.insertRow(), "No measured beans in the current crop.");
-        empty.colSpan = 6;
+        empty.colSpan = 7;
         return;
     }
     for (const bean of rows) {
@@ -154,6 +181,7 @@ function beanTable() {
         color.prepend(swatch);
         cell(row, bean.lightness);
         cell(row, bean.band);
+        cell(row, bean.sampled_area ?? bean.area);
         const use = cell(row, "");
         if (state.report) use.textContent = bean.excluded ? "Excluded" : "Included";
         else {
@@ -188,11 +216,40 @@ function firstOption(title, id = "") {
     return option;
 }
 
+function renderSampling() {
+    const suggestion = state.sampling;
+    $("sampling").hidden = !suggestion;
+    if (!suggestion) return;
+    const archived = !!state.report || suggestion.adopted;
+    $("samplingBean").textContent = suggestion.bean;
+    const retake = suggestion.status !== "ready";
+    $("samplingState").textContent = retake ? "Retake photo" : archived ? "Sampling adopted" : "Suggested";
+    $("samplingState").className = "badge" + (retake ? " retake" : "");
+    const percent = (suggestion.retained_ratio * 100).toFixed(0);
+    const minimum = (suggestion.minimum_ratio * 100).toFixed(0);
+    const reading = suggestion.lightness === null ? "No usable reading."
+        : "With this area: RGB " + suggestion.rgb.join(" / ") + " · lightness " + suggestion.lightness +
+          " · " + suggestion.band + " band.";
+    const whole = suggestion.whole.lightness === null ? "" :
+        " The whole-bean reading was RGB " + suggestion.whole.rgb.join(" / ") +
+        " · lightness " + suggestion.whole.lightness + ".";
+    $("samplingSummary").textContent = "Keeps " + suggestion.retained_area + " of " +
+        suggestion.area + " px (" + percent + "%, minimum " + minimum + "%). " + reading +
+        (retake ? " Too little bean face would remain, so the current reading is kept; retake the photo."
+                : whole);
+    $("adoptSampling").hidden = retake || archived;
+    $("restoreSampling").hidden = !suggestion.adopted || !!state.report;
+    $("samplingImage").hidden = retake;
+    $("samplingImage").href = "/roast" + samplePath("/sampling/" + encodeURIComponent(suggestion.bean) +
+        "/overlay.png") + (state.report ? "?report=" + state.report.id : "");
+}
+
 function render() {
     draw();
     $("viewerStatus").textContent = tooltip();
     beanTable();
     renderSummary(state.result.summary);
+    renderSampling();
     displaySettings(state.result.settings);
     const archived = !!state.report;
     $("inputs").disabled = archived;
@@ -218,13 +275,27 @@ async function selectPoint(point) {
     });
     state.selected = state.probe.bean;
     $("viewerStatus").textContent = tooltip();
-    draw();
-    beanTable();
+    await suggestSampling();
+    render();
 }
 
+async function suggestSampling() {
+    state.sampling = null;
+    if (!state.selected) { renderSampling(); return; }
+    try {
+        state.sampling = await request(samplePath("/sampling"), "POST", {
+            bean: state.selected, report: state.report?.id, settings: state.result.settings,
+        });
+    } catch (error) {
+        // The selected bean no longer exists under the current crop or separator.
+        state.selected = null;
+        state.probe = null;
+    }
+}
 function clearSelection() {
     state.probe = null;
     state.selected = null;
+    state.sampling = null;
     state.picking = false;
     state.corner = null;
     $("crop").textContent = "Set crop";
@@ -232,6 +303,7 @@ function clearSelection() {
 
 async function refresh(settings) {
     state.result = await request(samplePath("/inspect"), "POST", {settings});
+    if (state.selected) await suggestSampling();
     render();
 }
 
@@ -310,6 +382,28 @@ $("crop").onclick = () => {
 $("showExcluded").onchange = () => {
     draw();
     beanTable();
+};
+$("adoptSampling").onclick = run(async () => {
+    if (!state.sampling) return;
+    state.sample = await request(samplePath("/sampling"), "PUT", {
+        bean: state.sampling.bean, settings: state.result.settings, revision: state.sample.revision,
+    });
+    await refresh(state.sample.settings);
+    draw();
+    notice("Sampling area adopted. This bean now uses only the retained source pixels.");
+});
+$("restoreSampling").onclick = run(async () => {
+    if (!state.sampling) return;
+    const bean = state.sampling.bean;
+    state.sample = await request(samplePath("/sampling/" + encodeURIComponent(bean)) +
+        "?revision=" + state.sample.revision, "DELETE");
+    await refresh(state.sample.settings);
+    notice("Whole bean restored.");
+});
+$("closeSampling").onclick = () => {
+    state.sampling = null;
+    renderSampling();
+    draw();
 };
 $("canvas").onclick = run(async event => {
     const point = renderedPosition(event);

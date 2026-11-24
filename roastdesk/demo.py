@@ -37,6 +37,17 @@ def sample():
     return Image.fromarray(np.clip(colors, 0, 255).astype(np.uint8))
 
 
+def glare():
+    """Add one specular patch so the highlight-sampling workflow can be practiced."""
+    image = np.asarray(sample()).astype(np.float32)
+    y, x = np.indices((HEIGHT, WIDTH), dtype=float)
+    distance = np.hypot(x - 522, y - 152)
+    image[distance < 11] = [148, 147, 143]
+    rim = (distance >= 11) & (distance < 15)
+    image[rim] = image[rim] * .35 + np.array([155, 154, 150]) * .65
+    return Image.fromarray(np.clip(image, 0, 255).astype(np.uint8))
+
+
 def create(library):
-    return library.create("House roast • synthetic tray", sample(), "synthetic-tray.png",
+    return library.create("House roast • synthetic tray", glare(), "synthetic-tray.png",
                           defaults(WIDTH, HEIGHT), synthetic=True)
